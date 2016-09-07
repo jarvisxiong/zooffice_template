@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans:beans xmlns="http://www.springframework.org/schema/security" xmlns:beans="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd   
+        			    http://www.springframework.org/schema/security   http://www.springframework.org/schema/security/spring-security-3.1.xsd">
+
+	<global-method-security pre-post-annotations="enabled" />
+
+	<beans:bean id="reflectionSaltSource" class="org.springframework.security.authentication.dao.ReflectionSaltSource">
+		<beans:property name="userPropertyToUse" value="username" />
+	</beans:bean>
+
+	<!-- Generic Web -->
+	<beans:bean id="authenticatedVoter" class="org.springframework.security.access.vote.AuthenticatedVoter" />
+
+	<beans:bean id="accessDecisionManager" class="org.springframework.security.access.vote.AffirmativeBased">
+		<beans:constructor-arg name="decisionVoters">
+			<beans:list>
+				<beans:ref bean="authenticatedVoter" />
+			</beans:list>
+		</beans:constructor-arg>
+	</beans:bean>
+
+	<!-- custom-filter extends UsernamePasswordAuthenticationFilter -->
+	<beans:bean id="zoofficeUsernamePasswordAuthenticationFilter" class="org.zooffice.security.ZoofficeUsernamePasswordAuthenticationFilter">
+		<beans:property name="filterProcessesUrl" value="/form_Login" />
+		<beans:property name="rememberMeServices" ref="rememberMeServices" />
+		<beans:property name="authenticationSuccessHandler" ref="loginLogAuthenticationSuccessHandler" />
+		<beans:property name="authenticationFailureHandler" ref="simpleUrlAuthenticationFailureHandler" />
+		<beans:property name="authenticationManager" ref="authenticationManager" />
+	</beans:bean>
+
+	<!-- SuccessHandler -->
+	<beans:bean id="loginLogAuthenticationSuccessHandler"
+		class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler">
+		<beans:property name="defaultTargetUrl" value="/home" />
+		<beans:property name="alwaysUseDefaultTargetUrl" value="true" />
+	</beans:bean>
+
+	<!-- FailureHandler -->
+	<beans:bean id="simpleUrlAuthenticationFailureHandler" class="org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler">
+		<beans:property name="defaultFailureUrl" value="/login" />
+	</beans:bean>
+
+	<beans:bean id="authenticationProcessingFilterEntryPoint" class="org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint">
+		<beans:constructor-arg name="loginFormUrl" value="/login" />
+	</beans:bean>
+
+	<!-- static resource -->
+	<http pattern="/css/**" security="none" />
+	<http pattern="/img/**" security="none" />
+	<http pattern="/js/**" security="none" />
+	<http pattern="/plugins/**" security="none" />
+	<http pattern="/login" security="none" />
+
+	<!-- accessible from no authorized users -->
+	<http pattern="/check/**" security="none" />
+
+	<http entry-point-ref="authenticationProcessingFilterEntryPoint" access-decision-manager-ref="accessDecisionManager">
+		<intercept-url pattern="/" />
+		<intercept-url pattern="/home" />
+		<intercept-url pattern="/help**" />
+		<intercept-url pattern="/user/**" />
+		<custom-filter ref="pluggablePreAuthFilter" position="PRE_AUTH_FILTER" />
+		<custom-filter ref="zoofficeUsernamePasswordAuthenticationFilter" position="FORM_LOGIN_FILTER" />
+		<!-- logout to home, and then it will redirect to login. otherwise, there will be some ajax problem. -->
+		<logout logout-success-url="/" logout-url="/logout" delete-cookies="JSESSIONID,switchUser" invalidate-session="true" />
+		<session-management invalid-session-url="/login" session-fixation-protection="newSession" />
+
+		<remember-me key="zooffice" />
+	</http>
+
+	<beans:bean id="rememberMeServices" class="org.springframework.security.web.authentication.rememberme.TokenBasedRememberMeServices">
+		<beans:property name="userDetailsService" ref="zoofficeUserDetailsService" />
+		<beans:property name="key" value="zooffice" />
+	</beans:bean>
+
+	<beans:bean id="zoofficeAuthenticationPreAuthProvider" class="org.zooffice.security.ZoofficeAuthenticationPreAuthProvider">
+		<beans:property name="preAuthenticatedUserDetailsService">
+			<beans:bean id="userDetailsServiceWrapper" class="org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper">
+				<beans:property name="userDetailsService" ref="zoofficeUserDetailsService" />
+			</beans:bean>
+		</beans:property>
+		<beans:property name="userService" ref="userService" />
+	</beans:bean>
+
+	<authentication-manager alias="authenticationManager">
+		<authentication-provider ref="zoofficeAuthenticationPreAuthProvider" />
+		<authentication-provider ref="zoofficeAuthenticationProvider" />
+	</authentication-manager>
+
+</beans:beans>
